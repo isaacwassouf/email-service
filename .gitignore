@@ -1,0 +1,6 @@
+makefile
+**/*.log
+.env
+.air.toml
+tmp/
+.idea/
