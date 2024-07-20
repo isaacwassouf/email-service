@@ -1,0 +1,6 @@
+[submodule "protobufs/cryptography_service"]
+	path = protobufs/cryptography_service
+	url = git@github.com:isaacwassouf/cryptography-service-protobufs.git
+[submodule "protobufs/email_management_service"]
+	path = protobufs/email_management_service
+	url = git@github.com:isaacwassouf/email-service-protobufs.git
