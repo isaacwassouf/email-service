@@ -125,10 +125,15 @@ func (s *EmailManagerService) SetSMTPCredentials(ctx context.Context, in *pb.Set
 }
 
 func main() {
-	// load the SMTP configuration from the .env file
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Failed to load the .env file: ", err)
+	// Get the environment i.e. development or production
+	environment := utils.GetGoEnv()
+
+	// Load the .env file if the environment is development
+	if environment == "development" {
+		err := godotenv.Load()
+		if err != nil {
+			log.Fatal("Failed to load the .env file: ", err)
+		}
 	}
 
 	// Create a new cryptoServiceClient

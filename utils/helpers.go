@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"os"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -17,4 +19,13 @@ func NewCryptoServiceClient() (pbCrypto.CryptographyManagerClient, error) {
 		return nil, err
 	}
 	return pbCrypto.NewCryptographyManagerClient(conn), nil
+}
+
+func GetGoEnv() string {
+	environment, found := os.LookupEnv("GO_ENV")
+	if !found {
+		return "development"
+	}
+
+	return environment
 }
