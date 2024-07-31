@@ -10,9 +10,22 @@ import (
 )
 
 func NewCryptoServiceClient() (pbCrypto.CryptographyManagerClient, error) {
+	// get host and port from the environment
+	host, found := os.LookupEnv("CRYPTOGRAPHY_SERVICE_HOST")
+	if !found {
+		host = "localhost"
+	}
+
+	port, found := os.LookupEnv("CRYPTOGRAPHY_SERVICE_PORT")
+	if !found {
+		port = "8094"
+	}
+
+	connectionURI := host + ":" + port
+
 	// Create a connection to the email service
 	conn, err := grpc.Dial(
-		"localhost:8094",
+		connectionURI,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
