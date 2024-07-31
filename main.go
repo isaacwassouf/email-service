@@ -124,6 +124,35 @@ func (s *EmailManagerService) SetSMTPCredentials(ctx context.Context, in *pb.Set
 	return &pb.SetSMTPCredentialsResponse{Message: "SMTP credentials set successfully!"}, nil
 }
 
+func (s *EmailManagerService) SetEmailVerificationTemplate(ctx context.Context, in *pb.SetEmailTemplateRequest) (*pb.SetEmailTemplateResponse, error) {
+	tx, err := s.emailServiceDB.Db.Begin()
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	_, err = tx.Exec("UPDATE settings SET value = ? WHERE name = 'EMAIL_VERIFICATION_SUBJECT'", in.Subject)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	_, err = tx.Exec("UPDATE settings SET value = ? WHERE name = 'EMAIL_VERIFICATION_BODY'", in.Body)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	_, err = tx.Exec("UPDATE settings SET value = ? WHERE name = 'EMAIL_VERIFICATION_REDIRECT_URL'", in.RediectUrl)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &pb.SetEmailTemplateResponse{Message: "Email template set successfully!"}, nil
+}
+
 func main() {
 	// Get the environment i.e. development or production
 	environment := utils.GetGoEnv()
