@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"net"
@@ -10,6 +11,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"gopkg.in/gomail.v2"
 
 	"github.com/isaacwassou/email-service/database"
@@ -140,7 +142,7 @@ func (s *EmailManagerService) SetEmailVerificationTemplate(ctx context.Context, 
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	_, err = tx.Exec("UPDATE settings SET value = ? WHERE name = 'EMAIL_VERIFICATION_REDIRECT_URL'", in.RediectUrl)
+	_, err = tx.Exec("UPDATE settings SET value = ? WHERE name = 'EMAIL_VERIFICATION_REDIRECT_URL'", in.RedirectUrl)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -151,6 +153,105 @@ func (s *EmailManagerService) SetEmailVerificationTemplate(ctx context.Context, 
 	}
 
 	return &pb.SetEmailTemplateResponse{Message: "Email template set successfully!"}, nil
+}
+
+func (s *EmailManagerService) GetSMTPCredentials(ctx context.Context, in *emptypb.Empty) (*pb.SetSMTPCredentialsRequest, error) {
+	var host, user, sender sql.NullString
+	var port sql.NullInt32
+
+	err := s.emailServiceDB.Db.QueryRow("SELECT value FROM settings WHERE name = 'SMTP_HOST'").Scan(&host)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	err = s.emailServiceDB.Db.QueryRow("SELECT value FROM settings WHERE name = 'SMTP_PORT'").Scan(&port)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	err = s.emailServiceDB.Db.QueryRow("SELECT value FROM settings WHERE name = 'SMTP_USER'").Scan(&user)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	err = s.emailServiceDB.Db.QueryRow("SELECT value FROM settings WHERE name = 'SMTP_SENDER'").Scan(&sender)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &pb.SetSMTPCredentialsRequest{
+		Host:     host.String,
+		Port:     port.Int32,
+		Username: user.String,
+		Sender:   sender.String,
+	}, nil
+}
+
+func (s *EmailManagerService) SetEmailTemplate(ctx context.Context, in *pb.SetEmailTemplateRequest) (*pb.SetEmailTemplateResponse, error) {
+	emailTemplateFields, err := utils.GetEmailTemplateDBFields(in.EmailType)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	tx, err := s.emailServiceDB.Db.Begin()
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	updateSubjectQuery := fmt.Sprintf("UPDATE settings SET value = ? WHERE name = '%s'", emailTemplateFields.Subject)
+	_, err = tx.Exec(updateSubjectQuery, in.Subject)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	updateBodyQuery := fmt.Sprintf("UPDATE settings SET value = ? WHERE name = '%s'", emailTemplateFields.Body)
+	_, err = tx.Exec(updateBodyQuery, in.Body)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	updateRedirectURLQuery := fmt.Sprintf("UPDATE settings SET value = ? WHERE name = '%s'", emailTemplateFields.RedirectURL)
+	_, err = tx.Exec(updateRedirectURLQuery, in.RedirectUrl)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &pb.SetEmailTemplateResponse{Message: "Email template set successfully!"}, nil
+}
+
+func (s *EmailManagerService) GetEmailTemplate(ctx context.Context, in *pb.GetEmailTemaplateRequest) (*pb.GetEmailTemaplateResponse, error) {
+	emailTemplateFields, err := utils.GetEmailTemplateDBFields(in.EmailType)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	var subject, body, redirectURL sql.NullString
+
+	err = s.emailServiceDB.Db.QueryRow("SELECT value FROM settings WHERE name = ?", emailTemplateFields.Subject).Scan(&subject)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	err = s.emailServiceDB.Db.QueryRow("SELECT value FROM settings WHERE name = ?", emailTemplateFields.Body).Scan(&body)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	err = s.emailServiceDB.Db.QueryRow("SELECT value FROM settings WHERE name = ?", emailTemplateFields.RedirectURL).Scan(&redirectURL)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &pb.GetEmailTemaplateResponse{
+		Subject:     subject.String,
+		Body:        body.String,
+		RedirectUrl: redirectURL.String,
+	}, nil
 }
 
 func main() {
