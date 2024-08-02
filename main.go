@@ -50,6 +50,9 @@ func (s *EmailManagerService) SendVerifyEmailEmail(ctx context.Context, in *pb.S
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	// add the verification token to the redirect URL
+	emailTemplate.RedirectURL = fmt.Sprintf("%s?code=%s", emailTemplate.RedirectURL, in.Token)
+
 	// parse the email template body
 	emailBody, err := utils.ParseBodyTemplate(emailTemplate, "verify-email")
 	if err != nil {
