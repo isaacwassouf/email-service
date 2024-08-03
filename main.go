@@ -141,6 +141,63 @@ func (s *EmailManagerService) SendPasswordResetEmail(ctx context.Context, in *pb
 	return &pb.SendEmailResponse{Message: "Sent an email successfully!"}, nil
 }
 
+func (s *EmailManagerService) SendMFAEmail(ctx context.Context, in *pb.SendEmailRequest) (*pb.SendEmailResponse, error) {
+	// get the SMTP configuration from the database
+	smtpConfig, err := utils.GetSMTPConfig(s.emailServiceDB.Db)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	// check if the SMTP configuration is valid
+	if !utils.CheckSMTPConfig(smtpConfig) {
+		return nil, status.Error(codes.FailedPrecondition, "SMTP configuration is not set!")
+	}
+
+	// decrypt the SMTP Password
+	decryptedPassword, err := s.cryptoServiceClient.Decrypt(ctx, &pbCrypto.DecryptRequest{Ciphertext: smtpConfig.Password})
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	// get the email template details from the database
+	emailTemplate, err := utils.GetMFAEmailDetails(s.emailServiceDB.Db)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	// add the password reset token to the redirect URL
+	emailTemplate.RedirectURL = fmt.Sprintf("%s?code=%s", emailTemplate.RedirectURL, in.Token)
+
+	// parse the email template body
+	emailBody, err := utils.ParseBodyTemplate(emailTemplate, "password-reset")
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	// create new message
+	m := gomail.NewMessage()
+	// set the email message headers
+	m.SetHeader("From", smtpConfig.Sender)
+	m.SetHeader("To", in.To)
+	m.SetHeader("Subject", emailTemplate.Subject)
+	m.SetBody("text/html", emailBody)
+
+	// create a new dialer
+	dialer := gomail.NewDialer(
+		smtpConfig.Host,
+		smtpConfig.Port,
+		smtpConfig.User,
+		decryptedPassword.Plaintext,
+	)
+
+	// open a connection to the SMTP server and send the email
+	if err := dialer.DialAndSend(m); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &pb.SendEmailResponse{Message: "Sent an email successfully!"}, nil
+}
+
 // SetSMTPCredentials sets the SMTP credentials in the database
 func (s *EmailManagerService) SetSMTPCredentials(ctx context.Context, in *pb.SetSMTPCredentialsRequest) (*pb.SetSMTPCredentialsResponse, error) {
 	tx, err := s.emailServiceDB.Db.Begin()
